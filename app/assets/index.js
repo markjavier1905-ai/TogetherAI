@@ -1,0 +1,628 @@
+const toastEl = () => document.getElementById("toast");
+const showToast = (message) => {
+    const toast = toastEl();
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => toast.hidden = true, 1800);
+};
+const markButtonPending = button => {
+    if (!button) return;
+    button.classList.add("is-click-pending");
+    button.setAttribute("aria-busy", "true");
+};
+window.addEventListener("pageshow", () => {
+    document.querySelectorAll(".is-click-pending").forEach(button => {
+        button.classList.remove("is-click-pending");
+        button.removeAttribute("aria-busy");
+    });
+});
+const modal = document.getElementById("notify-modal");
+const modalBody = document.getElementById("notify-modal-body");
+const modalTitle = document.getElementById("notify-modal-title");
+let confirmResolve = null;
+const closeModal = () => {
+    if (confirmResolve) {
+        const resolve = confirmResolve;
+        confirmResolve = null;
+        resolve(false);
+    }
+    if (modal) modal.hidden = true;
+    if (modalBody) modalBody.innerHTML = "";
+};
+const openModal = (title, html) => {
+    if (!modal || !modalBody) return;
+    if (modalTitle) modalTitle.textContent = title;
+    modalBody.innerHTML = html;
+    modal.hidden = false;
+};
+const mobileMenu = document.getElementById("mobile-menu");
+const mobileMenuOpen = document.querySelector("[data-mobile-menu-open]");
+const closeMobileMenu = () => {
+    if (!mobileMenu) return;
+    mobileMenu.hidden = true;
+    document.body.classList.remove("mobile-menu-open");
+    if (mobileMenuOpen) mobileMenuOpen.setAttribute("aria-expanded", "false");
+};
+const openMobileMenu = () => {
+    if (!mobileMenu) return;
+    mobileMenu.hidden = false;
+    document.body.classList.add("mobile-menu-open");
+    if (mobileMenuOpen) mobileMenuOpen.setAttribute("aria-expanded", "true");
+};
+if (mobileMenuOpen) mobileMenuOpen.addEventListener("click", openMobileMenu);
+document.addEventListener("click", e => {
+    const button = e.target instanceof Element ? e.target.closest("[data-profile-toggle]") : null;
+    if (!button) return;
+    const disclosure = button.closest("[data-profile-disclosure]");
+    const detail = disclosure?.querySelector("[data-profile-edit]");
+    if (!detail) return;
+    const open = detail.classList.contains("is-hidden");
+    detail.classList.toggle("is-hidden", !open);
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) detail.querySelector("input, select, textarea")?.focus();
+});
+const forumMoreToggle = document.querySelector("[data-forum-more-toggle]");
+const forumMoreRegion = document.getElementById("forum-more-region");
+if (forumMoreToggle && forumMoreRegion) {
+    forumMoreToggle.addEventListener("click", () => {
+        const open = forumMoreRegion.hidden;
+        forumMoreRegion.hidden = !open;
+        forumMoreToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+}
+document.addEventListener("click", e => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (target && target.closest("[data-mobile-menu-close]")) {
+        closeMobileMenu();
+        return;
+    }
+    if (mobileMenu && !mobileMenu.hidden && target === mobileMenu) closeMobileMenu();
+});
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeMobileMenu();
+});
+const finishConfirm = (ok) => {
+    const resolve = confirmResolve;
+    confirmResolve = null;
+    if (modal) modal.hidden = true;
+    if (modalBody) modalBody.innerHTML = "";
+    if (resolve) resolve(ok);
+};
+const _openModalBox = (title, fallback, builderFn) => new Promise(resolve => {
+    if (!modal || !modalBody) { resolve(fallback); return; }
+    confirmResolve = resolve;
+    if (modalTitle) modalTitle.textContent = title;
+    modalBody.innerHTML = "";
+    const box = document.createElement("div");
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn alt";
+    cancel.textContent = "Cancel";
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "danger";
+    const focusEl = builderFn(box, cancel, ok);
+    modalBody.appendChild(box);
+    modal.hidden = false;
+    focusEl.focus();
+    if (focusEl === ok || focusEl === cancel) return;
+    if (focusEl.select) focusEl.select();
+});
+const openConfirm = (message, title = "Confirm action") => _openModalBox(title, false, (box, cancel, ok) => {
+    box.className = "confirm-box";
+    const text = document.createElement("p");
+    text.className = "confirm-message";
+    text.textContent = message;
+    const actions = document.createElement("div");
+    actions.className = "confirm-actions";
+    cancel.addEventListener("click", () => finishConfirm(false));
+    ok.textContent = "OK";
+    ok.addEventListener("click", () => finishConfirm(true));
+    actions.append(cancel, ok);
+    box.append(text, actions);
+    return cancel;
+});
+document.addEventListener("click", e => {
+    const button = e.target.closest("[data-plugin-upload-open]");
+    if (!button) return;
+    const template = document.querySelector("[data-plugin-upload-template]");
+    if (!template) return;
+    openModal("Upload plugin", template.innerHTML);
+    modalBody?.querySelector("[data-plugin-upload-file]")?.focus();
+});
+const openPluginUninstallConfirm = (message, title = "Uninstall plugin") => _openModalBox(title, false, (box, cancel, ok) => {
+    box.className = "confirm-box";
+    const text = document.createElement("p");
+    text.className = "confirm-message";
+    text.textContent = message;
+    const option = document.createElement("label");
+    option.className = "confirm-check";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = true;
+    const labelText = document.createElement("span");
+    labelText.textContent = "Keep plugin data";
+    option.append(checkbox, labelText);
+    const actions = document.createElement("div");
+    actions.className = "confirm-actions";
+    cancel.addEventListener("click", () => finishConfirm(false));
+    ok.textContent = "Uninstall";
+    ok.addEventListener("click", () => finishConfirm({keepData: checkbox.checked}));
+    actions.append(cancel, ok);
+    box.append(text, option, actions);
+    return checkbox;
+});
+const openPluginMarketInstallConfirm = (message, action = "Install") => _openModalBox(action + " plugin", false, (box, cancel, ok) => {
+    box.className = "confirm-box";
+    const text = document.createElement("p");
+    text.className = "confirm-message";
+    text.textContent = message;
+    const option = document.createElement("label");
+    option.className = "confirm-check";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = true;
+    const labelText = document.createElement("span");
+    labelText.textContent = "Auto-enable plugin";
+    option.append(checkbox, labelText);
+    const actions = document.createElement("div");
+    actions.className = "confirm-actions";
+    cancel.addEventListener("click", () => finishConfirm(false));
+    ok.textContent = action;
+    ok.addEventListener("click", () => finishConfirm({autoEnable: checkbox.checked}));
+    actions.append(cancel, ok);
+    box.append(text, option, actions);
+    return checkbox;
+});
+const openPrompt = (message, title = "Please enter", value = "1") => _openModalBox(title, null, (box, cancel, ok) => {
+    box.className = "confirm-box prompt-box";
+    const text = document.createElement("p");
+    text.className = "confirm-message";
+    text.textContent = message;
+    const input = document.createElement("input");
+    input.className = "prompt-input";
+    input.type = "number";
+    input.min = "1";
+    input.step = "1";
+    input.value = String(value || "1");
+    const actions = document.createElement("div");
+    actions.className = "confirm-actions";
+    const done = () => { finishConfirm(String(Math.max(1, parseInt(input.value || "1", 10) || 1))); };
+    cancel.addEventListener("click", () => finishConfirm(null));
+    ok.textContent = "OK";
+    ok.addEventListener("click", done);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); done(); } });
+    actions.append(cancel, ok);
+    box.append(text, input, actions);
+    return input;
+});
+window.openNotify = async function (url) {
+    try {
+        const response = await fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}});
+        const html = await response.text();
+        if ((response.headers.get("content-type") || "").includes("application/json")) {
+            const data = JSON.parse(html);
+            if (data.redirect) window.location.href = data.redirect;
+            else showToast(data.message || "Failed to open");
+            return false;
+        }
+        openModal("Message", html);
+        const textarea = modalBody?.querySelector("form")?.querySelector("textarea");
+        textarea?.focus();
+        textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+    } catch (_) {
+        showToast("Failed to open");
+    }
+    return false;
+};
+const runPageFlash = () => {
+    if (window.__pageFlash) showToast(window.__pageFlash);
+};
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", runPageFlash);
+else runPageFlash();
+const runSettingsUpdateCheck = () => {
+    const marker = document.querySelector("[data-settings-update-check-url]");
+    if (!marker) return;
+    fetch(marker.dataset.settingsUpdateCheckUrl || "index.php?a=update&notice_check=1", {
+        credentials: "same-origin",
+        headers: {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+    }).then(response => response.json()).then(data => {
+        const title = document.querySelector("[data-update-tool-title]");
+        if (!data?.update_available || !title || title.querySelector(".settings-update-dot")) return;
+        const dot = document.createElement("i");
+        dot.className = "settings-update-dot";
+        dot.title = "New version available";
+        dot.setAttribute("aria-label", "New version available");
+        title.appendChild(dot);
+    }).catch(() => {});
+};
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", runSettingsUpdateCheck);
+else runSettingsUpdateCheck();
+function avatarSeed(seed) {
+    const n = String(seed || "0").replace(/\D/g, "") || "0";
+    const mod = [...n].reduce((r, d) => (r * 10 + Number(d)) % 48, 0);
+    return String(mod || 48);
+}
+function avatarPickerStyle(p) {
+    const s = p?.querySelector("select[name=avatar_style]");
+    return s?.value || "dylan";
+}
+function avatarRemoteUrl(style, seed) {
+    return "https://api.dicebear.com/10.x/" + encodeURIComponent(style) + "/svg?seed=" + encodeURIComponent(seed);
+}
+function avatarPickerUrl(p, seed) {
+    const style = avatarPickerStyle(p);
+    const normalizedSeed = avatarSeed(seed || p.dataset.seed || "0");
+    if (p?.dataset.avatarLocalOnly === "1" && p.dataset.avatarBase) {
+        return p.dataset.avatarBase + encodeURIComponent(style + "_" + normalizedSeed + ".svg");
+    }
+    return avatarRemoteUrl(style, normalizedSeed);
+}
+function setAvatarPickerImg(img, p, seed) {
+    if (!img) return;
+    img.onerror = null;
+    img.src = avatarPickerUrl(p, seed);
+}
+function refreshAvatarPicker(p) {
+    const k = p?.querySelector("input[name=avatar_seed]");
+    const v = k?.value || "";
+    const i = p?.querySelector(".avatar-picker-preview img");
+    setAvatarPickerImg(i, p, v);
+    p?.querySelectorAll(".avatar-option").forEach(b => {
+        const seed = b.dataset.seed || "";
+        const img = b.querySelector("img");
+        setAvatarPickerImg(img, p, seed);
+        b.classList.toggle("active", seed === v);
+    });
+}
+function rebuildLocalAvatarPicker(p) {
+    if (p?.dataset.avatarLocalOnly !== "1") return;
+    const style = avatarPickerStyle(p);
+    const seeds = Array.from({length: 48}, (_, i) => String(i + 1));
+    const options = p.querySelector(".avatar-options");
+    const hidden = p.querySelector("input[name=avatar_seed]");
+    if (!options || !hidden || !seeds.length) return;
+    if (!seeds.includes(hidden.value)) hidden.value = seeds[0];
+    options.innerHTML = "";
+    for (const seed of seeds) {
+        const button = document.createElement("button");
+        button.className = "avatar-option" + (seed === hidden.value ? " active" : "");
+        button.type = "button";
+        button.dataset.seed = seed;
+        const img = document.createElement("img");
+        img.className = "avatar-img";
+        img.alt = "";
+        img.loading = "lazy";
+        img.src = avatarPickerUrl(p, seed);
+        button.appendChild(img);
+        options.appendChild(button);
+    }
+}
+document.addEventListener("change", e => {
+    const p = e.target.closest(".avatar-picker");
+    if (p) {
+        if (e.target.matches("select[name=avatar_style]")) rebuildLocalAvatarPicker(p);
+        refreshAvatarPicker(p);
+    }
+});
+document.addEventListener("click", e => {
+    const b = e.target.closest(".avatar-option");
+    if (!b) return;
+    const p = b.closest(".avatar-picker");
+    const k = p?.querySelector("input[name=avatar_seed]");
+    if (k) {
+        k.value = b.dataset.seed || "";
+        refreshAvatarPicker(p);
+    }
+});
+document.addEventListener("change", async e => {
+    const input = e.target.closest("[data-auto-submit]");
+    if (!input) return;
+    const form = input.closest("form");
+    if (!form) return;
+    const previous = input.checked;
+    const body = new FormData(form);
+    input.disabled = true;
+    try {
+        const response = await fetch(form.action || window.location.href, {method: "POST", body, credentials: "same-origin", headers: {"X-Requested-With": "XMLHttpRequest"}});
+        const data = await response.json();
+        if (!data?.ok) throw new Error(data?.message || "Save failed");
+        const replaceTarget = form.dataset.replaceTarget || "";
+        const replaceEl = replaceTarget ? form.closest(replaceTarget) : null;
+        if (replaceEl && data.html) {
+            replaceEl.outerHTML = data.html;
+            showToast(data.message || "Saved");
+            return;
+        }
+        showToast(data.message || "Saved");
+    } catch (err) {
+        input.checked = !previous;
+        showToast(err.message || "Save failed");
+    } finally {
+        input.disabled = false;
+    }
+});
+document.addEventListener("change", e => {
+    const action = e.target.closest("[data-topic-action]");
+    if (!action) return;
+    const form = action.closest("form");
+    const highlight = form?.querySelector("[data-topic-highlight-wrap]");
+    if (highlight) highlight.classList.toggle("is-hidden", action.value !== "highlight");
+});
+document.addEventListener("click", e => {
+    const swatch = e.target.closest("[data-topic-color]");
+    if (!swatch) return;
+    const wrap = swatch.closest("[data-topic-highlight-wrap]");
+    const form = swatch.closest("form");
+    const input = form?.querySelector("[data-topic-highlight-value]");
+    if (!input || !wrap) return;
+    input.value = swatch.dataset.topicColor || "";
+    wrap.querySelectorAll("[data-topic-color]").forEach(btn => btn.classList.toggle("active", btn === swatch));
+});
+window.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("[data-topic-action]").forEach(action => {
+        action.dispatchEvent(new Event("change", {bubbles: true}));
+    });
+});
+document.addEventListener("click", e => {
+    if (e.target?.closest("[data-modal-close]") || e.target === modal) closeModal();
+});
+document.addEventListener("click", async e => {
+    const link = e.target.closest("a[data-confirm]");
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (await openConfirm(link.dataset.confirm || "Proceed with this action?")) {
+        window.location.href = link.href;
+    }
+});
+document.addEventListener("click", e => {
+    const quote = e.target.closest(".quote-reply");
+    if (!quote) return;
+    e.preventDefault();
+    const textarea = document.querySelector("#reply textarea[name=body]");
+    const panel = document.getElementById("reply");
+    if (!textarea || !panel) {
+        window.location.href = quote.href;
+        return;
+    }
+    const floor = (quote.dataset.floor || "").trim();
+    const marker = /^\d+$/.test(floor) && Number(floor) > 0 ? " #" + floor : "";
+    const mention = "@" + (quote.dataset.username || "").trim() + marker + " ";
+    if (!textarea.value.includes(mention)) {
+        const prefix = textarea.value && !textarea.value.endsWith("\n") ? "\n" : "";
+        textarea.value += prefix + mention;
+    }
+    panel.scrollIntoView({block:"center"});
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+});
+document.addEventListener("submit", async e => {
+    if (e.defaultPrevented) return;
+    if (window.bbs1AttachmentUpload?.isUploading(e.target)) {
+        e.preventDefault();
+        showToast("Uploading attachment");
+        return;
+    }
+    const promptField = e.submitter?.dataset?.promptField || e.target?.dataset?.promptField || "";
+    if (promptField) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const input = e.target.elements?.[promptField];
+        const value = await openPrompt(e.submitter?.dataset?.promptMessage || e.target?.dataset?.promptMessage || "Please enter", e.submitter?.dataset?.promptTitle || e.target?.dataset?.promptTitle || "Please enter", e.submitter?.dataset?.promptValue || e.target?.dataset?.promptValue || input?.value || "1");
+        if (value === null || value === false) return;
+        if (input) input.value = value;
+        markButtonPending(e.submitter || e.target.querySelector("button[type=submit],button:not([type]),input[type=submit]"));
+        e.target.submit();
+        return;
+    }
+    if (e.target?.dataset?.pluginUninstall === "1") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const result = await openPluginUninstallConfirm(e.target.dataset.confirm || "Uninstall this plugin?");
+        if (!result) return;
+        let input = e.target.elements?.keep_plugin_data;
+        if (!input) {
+            input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "keep_plugin_data";
+            e.target.appendChild(input);
+        }
+        input.value = result.keepData ? "1" : "0";
+    } else if (e.target?.dataset?.pluginMarketInstall === "1") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const result = await openPluginMarketInstallConfirm(e.target.dataset.confirm || "Install this plugin?", e.target.dataset.pluginMarketAction || "Install");
+        if (!result) return;
+        let input = e.target.elements?.auto_enable;
+        if (!input) {
+            input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "auto_enable";
+            e.target.appendChild(input);
+        }
+        input.value = result.autoEnable ? "1" : "0";
+    } else {
+        const confirmMessage = e.submitter?.dataset?.confirm || e.target?.dataset?.confirm || "";
+        if (confirmMessage) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (!await openConfirm(confirmMessage)) return;
+            if (e.target?.dataset?.noAjax === "1") {
+                markButtonPending(e.submitter || e.target.querySelector("button[type=submit],button:not([type]),input[type=submit]"));
+                e.target.submit();
+                return;
+            }
+        }
+    }
+    const replyForm = e.target.closest(".ajax-reply-form");
+    if (replyForm) {
+        e.preventDefault();
+        const button = replyForm.querySelector("button");
+        const status = replyForm.querySelector(".reply-status");
+        const list = document.querySelector(".topic-post-list");
+        const loadingText = button?.dataset?.loadingText || "";
+        const buttonText = button?.textContent || "";
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        if (loadingText) {
+            button.textContent = loadingText;
+        }
+        if (status) status.textContent = "Submitting";
+        try {
+            window.bbs1AttachmentUpload?.beforeSubmit(replyForm);
+            const response = await fetch(replyForm.action, {method: "POST", body: new FormData(replyForm), headers: {"X-Requested-With": "XMLHttpRequest"}});
+            const data = await response.json();
+            if (!data.ok) throw new Error(data.message || "Submit failed");
+            window.bbs1AttachmentUpload?.afterSubmit();
+            if (data.redirect) {
+                window.location.href = data.redirect;
+                return;
+            }
+            list?.querySelector(".empty-state")?.remove();
+            if (data.html) list?.insertAdjacentHTML("beforeend", data.html);
+            const title = document.querySelector(".post-topic-title");
+            const stats = title?.querySelector(".post-content-stats");
+            if (title) {
+                if (data.stats_html) {
+                    if (stats) stats.outerHTML = data.stats_html;
+                    else title.insertAdjacentHTML("beforeend", data.stats_html);
+                } else if (stats) stats.remove();
+            }
+            replyForm.reset();
+            if (window.turnstile && replyForm.querySelector(".cf-turnstile")) window.turnstile.reset(replyForm.querySelector(".cf-turnstile"));
+            if (status) status.textContent = "Replied";
+        } catch (err) {
+            const message = err?.message || "Submit failed";
+            if (status) status.textContent = message;
+            showToast(message);
+            if (window.turnstile && replyForm.querySelector(".cf-turnstile")) window.turnstile.reset(replyForm.querySelector(".cf-turnstile"));
+        } finally {
+            button.disabled = false;
+            button.removeAttribute("aria-busy");
+            if (loadingText) {
+                button.textContent = buttonText;
+            }
+        }
+        return;
+    }
+    const notifyForm = e.target.closest(".notify-form");
+    if (notifyForm) {
+        e.preventDefault();
+        const button = notifyForm.querySelector("button");
+        const status = notifyForm.querySelector(".notify-status");
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        if (status) status.textContent = "Sending";
+        try {
+            const response = await fetch(notifyForm.action, {method: "POST", body: new FormData(notifyForm), headers: {"X-Requested-With": "XMLHttpRequest"}});
+            const data = await response.json();
+            if (!data.ok) throw new Error(data.message || "Send failed");
+            if (data.redirect) {
+                window.location.href = data.redirect;
+                return;
+            }
+            closeModal();
+            showToast(data.message || "Sent");
+        } catch (err) {
+            showToast(err?.message || "Send failed");
+        } finally {
+            button.disabled = false;
+            button.removeAttribute("aria-busy");
+            if (status) status.textContent = "";
+        }
+        return;
+    }
+    const form = e.target.closest("form");
+    if (!form) return;
+    if (form.dataset.noAjax === "1") {
+        markButtonPending(e.submitter || form.querySelector("button[type=submit],button:not([type]),input[type=submit]"));
+        return;
+    }
+    if ((form.method || "").toLowerCase() !== "post") return;
+    e.preventDefault();
+    const button = e.submitter || form.querySelector("button[type=submit],button:not([type]),input[type=submit]");
+    const loadingText = button?.dataset?.loadingText || "";
+    const buttonText = button?.textContent || "";
+    const resetButton = () => {
+        if (!button) return;
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        if (loadingText) {
+            button.textContent = buttonText;
+        }
+    };
+    if (button) {
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        if (loadingText) {
+            button.textContent = loadingText;
+        }
+    }
+    try {
+        window.bbs1AttachmentUpload?.beforeSubmit(form);
+        const body = new FormData(form);
+        if (button?.name) body.append(button.name, button.value ?? "1");
+        const response = await fetch(form.action || window.location.href, {method: "POST", body, headers: {"X-Requested-With": "XMLHttpRequest"}});
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (_) {
+            throw new Error("Operation failed");
+        }
+        if (!data.ok) throw new Error(data.message || "Operation failed");
+        window.bbs1AttachmentUpload?.afterSubmit();
+        if (data.modal && typeof data.modal === "object") {
+            openModal(data.modal.title || data.message || "Notice", data.modal.html || "");
+            resetButton();
+            return;
+        }
+        const replaceTarget = form.dataset.replaceTarget || "";
+        const replaceEl = replaceTarget ? form.closest(replaceTarget) : null;
+        if (data.refresh && replaceEl) {
+            try {
+                const panelResponse = await fetch(window.location.href, {credentials: "same-origin"});
+                const panelDoc = new DOMParser().parseFromString(await panelResponse.text(), "text/html");
+                const panel = panelDoc.querySelector(replaceTarget);
+                if (panel) replaceEl.outerHTML = panel.outerHTML;
+            } catch (_) {}
+            if (!replaceEl || replaceEl.isConnected) resetButton();
+            showToast(data.message || "Operation complete");
+            return;
+        }
+        showToast(data.message || "Operation complete");
+        if (replaceEl && data.html) {
+            replaceEl.outerHTML = data.html;
+            return;
+        }
+        const removeTarget = form.dataset.removeTarget || "";
+        const removeEl = removeTarget ? form.closest(removeTarget) : null;
+        if (removeEl) {
+            removeEl.remove();
+            return;
+        }
+        if (data.redirect) setTimeout(() => { window.location.href = data.redirect; }, 800);
+    } catch (err) {
+        showToast(err?.message || "Operation failed");
+        if (window.turnstile && form.querySelector(".cf-turnstile")) window.turnstile.reset(form.querySelector(".cf-turnstile"));
+        resetButton();
+    }
+});
+window.addEventListener("load", () => {
+    const shareForm = document.querySelector("form[data-plugin-share-auto='1']");
+    if (shareForm) {
+        shareForm.submit();
+        return;
+    }
+    const replyId = new URLSearchParams(window.location.search).get("replyid") || "";
+    const floor = new URLSearchParams(window.location.search).get("floor") || "";
+    const target = /^\d+$/.test(replyId) ? document.getElementById("post-" + replyId) : (/^\d+$/.test(floor) ? document.querySelector('[data-floor="' + floor + '"]') : null);
+    if (target) target.scrollIntoView({block:"center"});
+});

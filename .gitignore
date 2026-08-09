@@ -1,0 +1,14 @@
+app/*
+!app/assets/
+!app/optional/
+app/assets/*
+!app/assets/index.css
+!app/assets/index.js
+!app/assets/index.svg
+.DS_Store
+.vscode
+.codebuddy
+/docker/
+/tmp/
+/scripts/
+.venv*
