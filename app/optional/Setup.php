@@ -273,32 +273,53 @@ public static function i_form(string $site_name, string $admin_user, string $adm
     self::setup_html('Install', $body);
 }
 
+public static function i_form_env(array $config, array $values = []): void
+{
+    $driver = (string)($config['driver'] ?? 'sqlite');
+    $db_label = $driver === 'sqlite'
+        ? 'SQLite / ' . (string)($config['database'] ?? '')
+        : strtoupper($driver === 'pgsql' ? 'PostgreSQL' : 'MySQL') . ' / ' . (string)($config['host'] ?? '') . ':' . (string)($config['port'] ?? '') . ' / ' . (string)($config['database'] ?? '');
+    $v = fn(string $name, string $default = ''): string => h((string)($values[$name] ?? $default));
+    $body = '<div class="hero"><h1>Install</h1><p>Database configuration was detected from environment variables; only the site and admin account are needed.</p></div><div class="grid"><section class="card"><div class="hd"><h2>Installation settings</h2></div><div class="bd"><form class="form" method="post"><input type="hidden" name="step" value="install"><div class="note ok">Database: <span class="mono">' . h($db_label) . '</span> (from environment variables)</div><div class="row"><label>Site name</label><input type="text" name="site_name" value="' . $v('site_name', 'My Forum') . '" required></div><div class="row"><label>Admin username</label><input type="text" name="admin_username" value="' . $v('admin_username', 'admin') . '" required></div><div class="row"><label>Admin email</label><input type="email" name="admin_email" value="' . $v('admin_email') . '" required><small>Used for password recovery and notifications.</small></div><div class="row"><label>Admin password</label><input type="password" name="admin_password" value="' . $v('admin_password') . '" required></div><div class="row"><label>Confirm admin password</label><input type="password" name="admin_password2" value="' . $v('admin_password2') . '" required></div><div class="row"><label>Default forum name</label><input type="text" name="forum_name" value="' . $v('forum_name', 'General') . '" required></div><div class="checks"><label class="check"><input type="checkbox" name="confirm_clean" value="1" required><span>I confirm this is a fresh installation and data will be cleared.</span></label><label class="check"><input type="checkbox" name="confirm_admin" value="1" required><span>I confirm I will manually set the first admin password.</span></label></div><div class="actions"><button class="btn" type="submit">Start installation</button></div></form></div></section><aside class="card"><div class="hd"><h2>Installation notes</h2></div><div class="bd"><ul class="list"><li>The database connection is taken from environment variables (DATABASE_URL or DB_*)</li><li>The database must be created beforehand; the installer will create its tables</li><li>The first admin will have full permissions</li><li>Admin email can be used for password recovery</li></ul></div></aside></div>';
+    self::setup_html('Install', $body);
+}
+
 public static function setup_install_run(): never
 {
     if (is_file(INSTALL_LOCK_FILE)) {
         self::i_locked();
     }
     self::i_require_writable_dirs();
+    $env_config = app_db_env_config(INSTALL_DATA_DIR);
     $step = (string)($_POST['step'] ?? '');
     if ($step !== 'install') {
+        if ($env_config !== null) self::i_form_env($env_config);
         self::i_form('My Forum', 'admin', '', '', 'General');
     }
     $form_values = $_POST;
-    if (!isset($_POST['confirm_clean'], $_POST['confirm_admin'])) self::i_form('My Forum', 'admin', '', '', 'General', $form_values);
-    $driver = in_array((string)($_POST['db_type'] ?? 'sqlite'), ['sqlite', 'mysql', 'pgsql'], true) ? (string)($_POST['db_type'] ?? 'sqlite') : 'sqlite';
-    $db_name = trim((string)($_POST['db_name'] ?? ''));
-    $sqlite_name = $driver === 'sqlite' ? self::i_db_name() : '';
-    $config = $driver === 'sqlite' ? [
-        'driver' => 'sqlite', 'database' => $sqlite_name, 'path' => INSTALL_DATA_DIR . '/' . $sqlite_name,
-    ] : [
-        'driver' => $driver,
-        'host' => trim((string)($_POST['db_host'] ?? '127.0.0.1')),
-        'port' => max(1, (int)($_POST['db_port'] ?? ($driver === 'mysql' ? 3306 : 5432))),
-        'database' => $db_name,
-        'username' => (string)($_POST['db_user'] ?? ''),
-        'password' => (string)($_POST['db_password'] ?? ''),
-    ];
-    if ($driver !== 'sqlite' && ($config['host'] === '' || $config['database'] === '' || $config['username'] === '')) self::i_form('My Forum', 'admin', '', '', 'General', $form_values);
+    if (!isset($_POST['confirm_clean'], $_POST['confirm_admin'])) {
+        if ($env_config !== null) self::i_form_env($env_config, $form_values);
+        self::i_form('My Forum', 'admin', '', '', 'General', $form_values);
+    }
+    if ($env_config !== null) {
+        $config = $env_config;
+        $driver = (string)$config['driver'];
+    } else {
+        $driver = in_array((string)($_POST['db_type'] ?? 'sqlite'), ['sqlite', 'mysql', 'pgsql'], true) ? (string)($_POST['db_type'] ?? 'sqlite') : 'sqlite';
+        $db_name = trim((string)($_POST['db_name'] ?? ''));
+        $sqlite_name = $driver === 'sqlite' ? self::i_db_name() : '';
+        $config = $driver === 'sqlite' ? [
+            'driver' => 'sqlite', 'database' => $sqlite_name, 'path' => INSTALL_DATA_DIR . '/' . $sqlite_name,
+        ] : [
+            'driver' => $driver,
+            'host' => trim((string)($_POST['db_host'] ?? '127.0.0.1')),
+            'port' => max(1, (int)($_POST['db_port'] ?? ($driver === 'mysql' ? 3306 : 5432))),
+            'database' => $db_name,
+            'username' => (string)($_POST['db_user'] ?? ''),
+            'password' => (string)($_POST['db_password'] ?? ''),
+        ];
+        if ($driver !== 'sqlite' && ($config['host'] === '' || $config['database'] === '' || $config['username'] === '')) self::i_form('My Forum', 'admin', '', '', 'General', $form_values);
+    }
     $site_name = trim((string)($_POST['site_name'] ?? 'My Forum'));
     $admin_username = trim((string)($_POST['admin_username'] ?? 'admin'));
     $admin_email = trim((string)($_POST['admin_email'] ?? ''));

@@ -35,7 +35,7 @@ spl_autoload_register(static function (string $class_name): void {
     $class_file = APP_ROOT . '/' . str_replace('\\', '/', $class_name) . '.php';
     if (is_file($class_file)) require_once $class_file;
 });
-function app_db_config(string $file, string $data_dir): array
+function app_db_env_config(string $data_dir): ?array
 {
     $database_url = getenv('DATABASE_URL');
     if (is_string($database_url) && $database_url !== '') {
@@ -70,6 +70,12 @@ function app_db_config(string $file, string $data_dir): array
             'password' => (string)(getenv('DB_PASSWORD') ?: getenv('DB_PASS') ?: ''),
         ];
     }
+    return null;
+}
+function app_db_config(string $file, string $data_dir): array
+{
+    $env = app_db_env_config($data_dir);
+    if ($env !== null) return $env;
     $config = is_file($file) ? include $file : [];
     $config = is_array($config) ? $config : [];
     if (!isset($config['driver']) && isset($config['db_file'])) $config['driver'] = 'sqlite';
