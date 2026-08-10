@@ -452,7 +452,22 @@ function attach_topic_list_users(array $rows): array
 }
 function db_schema_ready(): bool
 {
-    return is_file(INSTALL_LOCK_FILE);
+    if (is_file(INSTALL_LOCK_FILE)) return true;
+    try {
+        $config = db_config();
+        $db = app_db_connect($config);
+        $driver = (string)$config['driver'];
+        if (!app_db_table_exists($db, $driver, 'app_users') || !app_db_table_exists($db, $driver, 'app_settings')) return false;
+        $stmt = $db->prepare("SELECT value FROM app_settings WHERE name='site_name'");
+        $stmt->execute();
+        if ($stmt->fetchColumn() === false) return false;
+        $dir = dirname(INSTALL_LOCK_FILE);
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        @file_put_contents(INSTALL_LOCK_FILE, (string)time(), LOCK_EX);
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 function default_settings(): array
 {
