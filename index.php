@@ -37,6 +37,39 @@ spl_autoload_register(static function (string $class_name): void {
 });
 function app_db_config(string $file, string $data_dir): array
 {
+    $database_url = getenv('DATABASE_URL');
+    if (is_string($database_url) && $database_url !== '') {
+        $parts = parse_url($database_url);
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        if (is_array($parts) && in_array($scheme, ['postgres', 'postgresql', 'mysql'], true)) {
+            $driver = $scheme === 'mysql' ? 'mysql' : 'pgsql';
+            return [
+                'driver' => $driver,
+                'host' => trim((string)($parts['host'] ?? '127.0.0.1')),
+                'port' => (int)($parts['port'] ?? ($driver === 'mysql' ? 3306 : 5432)),
+                'database' => trim((string)($parts['path'] ?? ''), '/'),
+                'username' => rawurldecode((string)($parts['user'] ?? '')),
+                'password' => rawurldecode((string)($parts['pass'] ?? '')),
+            ];
+        }
+    }
+    $env_driver = getenv('DB_DRIVER');
+    if (is_string($env_driver) && $env_driver !== '') {
+        $driver = in_array($env_driver, ['sqlite', 'mysql', 'pgsql'], true) ? $env_driver : 'sqlite';
+        if ($driver === 'sqlite') {
+            $name = basename((string)(getenv('DB_NAME') ?: 'forum.sqlite'));
+            if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*\.sqlite$/', $name)) $name = 'forum.sqlite';
+            return ['driver' => 'sqlite', 'database' => $name, 'path' => $data_dir . '/' . $name];
+        }
+        return [
+            'driver' => $driver,
+            'host' => trim((string)(getenv('DB_HOST') ?: '127.0.0.1')),
+            'port' => (int)(getenv('DB_PORT') ?: ($driver === 'mysql' ? 3306 : 5432)),
+            'database' => trim((string)(getenv('DB_NAME') ?: '')),
+            'username' => (string)(getenv('DB_USER') ?: ''),
+            'password' => (string)(getenv('DB_PASSWORD') ?: getenv('DB_PASS') ?: ''),
+        ];
+    }
     $config = is_file($file) ? include $file : [];
     $config = is_array($config) ? $config : [];
     if (!isset($config['driver']) && isset($config['db_file'])) $config['driver'] = 'sqlite';
