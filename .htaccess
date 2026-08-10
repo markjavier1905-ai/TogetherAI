@@ -1,5 +1,9 @@
 Options -Indexes
 
+<Files "docker-entrypoint.sh">
+    Require all denied
+</Files>
+
 RewriteEngine On
 
 RewriteRule ^app/data/ - [F,L]
